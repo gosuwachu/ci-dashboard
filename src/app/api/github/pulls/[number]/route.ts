@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { fetchPull, fetchStatuses } from "@/lib/github";
-import { parseContext } from "@/lib/constants";
-import type { CommitStatus, ParsedStatus, GroupedStatuses } from "@/lib/types";
+import { fetchPull, fetchPullCommits, fetchCombinedStatus, fetchPullReviews } from "@/lib/github";
+import { OWNER, REPO } from "@/lib/constants";
+import type { StatusState } from "@/lib/types";
 
 export async function GET(
   _request: Request,
@@ -10,30 +10,57 @@ export async function GET(
   const { number } = await params;
 
   try {
-    const pr = await fetchPull(Number(number));
+    const [pr, rawCommits, rawReviews] = await Promise.all([
+      fetchPull(Number(number)),
+      fetchPullCommits(Number(number)),
+      fetchPullReviews(Number(number)),
+    ]);
+
     const head = pr.head as Record<string, string>;
     const user = pr.user as Record<string, unknown>;
 
-    const raw: CommitStatus[] = await fetchStatuses(head.sha);
-
-    const byContext = new Map<string, CommitStatus>();
-    for (const s of raw) {
-      if (!byContext.has(s.context)) {
-        byContext.set(s.context, s);
+    // Determine review state: take the latest decisive review per reviewer
+    const reviewsByUser = new Map<string, string>();
+    for (const r of rawReviews as Record<string, unknown>[]) {
+      const reviewer = (r.user as Record<string, unknown>).login as string;
+      const state = r.state as string;
+      if (state === "APPROVED" || state === "CHANGES_REQUESTED" || state === "DISMISSED") {
+        reviewsByUser.set(reviewer, state);
       }
     }
+    const reviewStates = [...reviewsByUser.values()];
+    const review_state = reviewStates.includes("CHANGES_REQUESTED")
+      ? "changes_requested"
+      : reviewStates.includes("APPROVED")
+        ? "approved"
+        : "pending";
 
-    const statuses: GroupedStatuses = { ios: [], android: [], other: [] };
-    for (const s of byContext.values()) {
-      const parsed = parseContext(s.context);
-      if (parsed) {
-        const ps: ParsedStatus = { ...s, platform: parsed.platform, step: parsed.step };
-        if (parsed.platform === "ios") statuses.ios.push(ps);
-        else statuses.android.push(ps);
-      } else {
-        statuses.other.push(s);
-      }
-    }
+    // Build commit list (newest first) with combined status
+    const commits = await Promise.all(
+      (rawCommits as Record<string, unknown>[]).reverse().map(async (c) => {
+        const commit = c.commit as Record<string, unknown>;
+        const commitAuthor = commit.author as Record<string, string>;
+        const author = c.author as Record<string, unknown> | null;
+
+        let status: StatusState | null = null;
+        try {
+          const combined = await fetchCombinedStatus(c.sha as string);
+          status = combined.total_count === 0 ? null : (combined.state as StatusState);
+        } catch {
+          // status unavailable
+        }
+
+        return {
+          sha: c.sha as string,
+          message: (commit.message as string).split("\n")[0],
+          author: commitAuthor.name,
+          author_login: author ? (author.login as string) : null,
+          avatar_url: author ? (author.avatar_url as string) : "",
+          date: commitAuthor.date,
+          status,
+        };
+      })
+    );
 
     return NextResponse.json({
       pr: {
@@ -44,10 +71,11 @@ export async function GET(
         branch: head.ref,
         base_branch: (pr.base as Record<string, string>).ref,
         head_sha: head.sha,
-        body: pr.body,
+        html_url: `https://github.com/${OWNER}/${REPO}/pull/${pr.number}`,
+        review_state,
         updated_at: pr.updated_at,
       },
-      statuses,
+      commits,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

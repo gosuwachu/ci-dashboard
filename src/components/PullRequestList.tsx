@@ -3,21 +3,11 @@
 import Link from "next/link";
 import useSWR from "swr";
 import { POLLING_INTERVAL } from "@/lib/constants";
+import { timeAgo } from "@/lib/utils";
 import type { PullRequest } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
 
 export default function PullRequestList() {
   const { data, error, isLoading } = useSWR<{ pulls: PullRequest[] }>(

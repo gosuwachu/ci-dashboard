@@ -6,18 +6,65 @@ import { POLLING_INTERVAL } from "@/lib/constants";
 import type { Commit } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 import CommitStatusGrid from "./CommitStatusGrid";
+import AuthorLink from "./AuthorLink";
+import CommitLink from "./CommitLink";
+import { timeAgo } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function LatestCommit({ commit }: { commit: Commit }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5">
+      <h3 className="text-lg font-semibold text-gray-900">{commit.message}</h3>
+      <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
+        <CommitLink sha={commit.sha} />
+        <span>&middot;</span>
+        <AuthorLink login={commit.author_login} name={commit.author} />
+        <span>&middot;</span>
+        <span>{timeAgo(commit.date)}</span>
+      </div>
+      <div className="mt-4">
+        <CommitStatusGrid sha={commit.sha} />
+      </div>
+    </div>
+  );
+}
+
+function PreviousCommitRow({
+  commit,
+  expanded,
+  onToggle,
+}: {
+  commit: Commit;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      >
+        <span className={`text-xs transition-transform ${expanded ? "rotate-90" : ""}`}>
+          &#9654;
+        </span>
+        <CommitLink sha={commit.sha} />
+        <span className="flex-1 truncate text-sm font-medium text-gray-800">
+          {commit.message}
+        </span>
+        <span className="text-xs text-gray-400 whitespace-nowrap">
+          <AuthorLink login={commit.author_login} name={commit.author} />
+          {" "}&middot; {timeAgo(commit.date)}
+        </span>
+        <StatusBadge state={commit.status} />
+      </button>
+      {expanded && (
+        <div className="border-t border-gray-100 px-4 py-3">
+          <CommitStatusGrid sha={commit.sha} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CommitList() {
@@ -31,8 +78,9 @@ export default function CommitList() {
   if (isLoading) {
     return (
       <div className="space-y-3">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="h-16 animate-pulse rounded-lg bg-gray-100" />
+        <div className="h-40 animate-pulse rounded-lg bg-gray-100" />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-14 animate-pulse rounded-lg bg-gray-100" />
         ))}
       </div>
     );
@@ -42,37 +90,29 @@ export default function CommitList() {
     return <p className="text-red-500">Failed to load commits</p>;
   }
 
+  const [latest, ...previous] = data.commits;
+
   return (
-    <div className="space-y-2">
-      {data.commits.map((c) => (
-        <div key={c.sha} className="rounded-lg border border-gray-200 bg-white">
-          <button
-            onClick={() => setExpanded(expanded === c.sha ? null : c.sha)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-          >
-            <span
-              className={`text-xs transition-transform ${expanded === c.sha ? "rotate-90" : ""}`}
-            >
-              &#9654;
-            </span>
-            <code className="text-xs font-mono text-gray-500">
-              {c.sha.slice(0, 7)}
-            </code>
-            <span className="flex-1 truncate text-sm font-medium text-gray-800">
-              {c.message}
-            </span>
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              {c.author} &middot; {timeAgo(c.date)}
-            </span>
-            <StatusBadge state={c.status} />
-          </button>
-          {expanded === c.sha && (
-            <div className="border-t border-gray-100 px-4 py-2">
-              <CommitStatusGrid sha={c.sha} />
-            </div>
-          )}
+    <div>
+      {latest && <LatestCommit commit={latest} />}
+
+      {previous.length > 0 && (
+        <div className="mt-8">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Previous
+          </h3>
+          <div className="space-y-2">
+            {previous.map((c) => (
+              <PreviousCommitRow
+                key={c.sha}
+                commit={c}
+                expanded={expanded === c.sha}
+                onToggle={() => setExpanded(expanded === c.sha ? null : c.sha)}
+              />
+            ))}
+          </div>
         </div>
-      ))}
+      )}
     </div>
   );
 }

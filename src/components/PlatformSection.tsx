@@ -35,7 +35,7 @@ export default function PlatformSection({
             </div>
             {s.target_url && (
               <a
-                href={s.target_url}
+                href={s.target_url.replace(/\/?$/, "/console")}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-blue-600 hover:text-blue-800 hover:underline"

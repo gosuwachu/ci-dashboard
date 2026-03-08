@@ -36,6 +36,7 @@ export async function GET(request: Request) {
           sha: c.sha,
           message: (commit.message as string).split("\n")[0],
           author: commitAuthor.name,
+          author_login: author ? (author.login as string) : null,
           avatar_url: author ? (author.avatar_url as string) : "",
           date: commitAuthor.date,
           status,

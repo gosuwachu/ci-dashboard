@@ -17,6 +17,7 @@ export interface Commit {
   sha: string;
   message: string;
   author: string;
+  author_login: string | null;
   avatar_url: string;
   date: string;
   status: StatusState | null;

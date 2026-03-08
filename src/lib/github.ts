@@ -39,6 +39,20 @@ export async function fetchPulls(state = "open") {
   return res.json();
 }
 
+export async function fetchPullCommits(number: number) {
+  const url = `${BASE}/repos/${OWNER}/${REPO}/pulls/${number}/commits?per_page=100`;
+  const res = await fetch(url, { headers: headers(), next: { revalidate: 0 } });
+  if (!res.ok) throw new Error(`GitHub pull commits: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchPullReviews(number: number) {
+  const url = `${BASE}/repos/${OWNER}/${REPO}/pulls/${number}/reviews?per_page=100`;
+  const res = await fetch(url, { headers: headers(), next: { revalidate: 0 } });
+  if (!res.ok) throw new Error(`GitHub pull reviews: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchPull(number: number) {
   const url = `${BASE}/repos/${OWNER}/${REPO}/pulls/${number}`;
   const res = await fetch(url, { headers: headers(), next: { revalidate: 0 } });
