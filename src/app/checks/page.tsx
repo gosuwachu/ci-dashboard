@@ -4,9 +4,12 @@ import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import useSWR from "swr";
-import { POLLING_INTERVAL } from "@/lib/constants";
-import type { StatusState } from "@/lib/types";
+import { POLLING_INTERVAL, parseContext, stepDisplayName } from "@/lib/constants";
+import { timeAgo } from "@/lib/utils";
+import type { Commit, GroupedStatuses } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
+import CommitLink from "@/components/CommitLink";
+import AuthorLink from "@/components/AuthorLink";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -14,31 +17,73 @@ type RerunStatus = "idle" | "loading" | "success" | "error";
 
 function CheckDetail() {
   const searchParams = useSearchParams();
-  const buildUrl = searchParams.get("build");
+  const sha = searchParams.get("sha");
+  const job = searchParams.get("job");
+  const build = searchParams.get("build");
   const name = searchParams.get("name") || "Check";
-  const from = searchParams.get("from") || "/main";
-  const state = (searchParams.get("state") || null) as StatusState | null;
+  const pr = searchParams.get("pr");
 
-  const backLabel = from.startsWith("/pulls/")
-    ? `PR #${from.split("/").pop()}`
-    : "Main Branch";
+  const parsed = parseContext(name);
+  const displayName = parsed
+    ? `${parsed.platform.toUpperCase()} — ${stepDisplayName(parsed.step)}`
+    : name;
 
   const [rerunStatus, setRerunStatus] = useState<RerunStatus>("idle");
 
-  const { data, error, isLoading } = useSWR<{ output: string }>(
-    buildUrl ? `/api/jenkins/console?buildUrl=${encodeURIComponent(buildUrl)}` : null,
+  // Fetch commit details
+  const { data: commit } = useSWR<Commit>(
+    sha ? `/api/github/commits/${sha}` : null,
     fetcher,
-    { refreshInterval: POLLING_INTERVAL }
   );
 
+  // Fetch statuses to get state and created_at for this check
+  const { data: statuses } = useSWR<GroupedStatuses>(
+    sha ? `/api/github/commits/${sha}/statuses` : null,
+    fetcher,
+    { refreshInterval: POLLING_INTERVAL },
+  );
+
+  // Find this check's status from the grouped statuses
+  const allStatuses = statuses
+    ? [...statuses.ios, ...statuses.android, ...statuses.other]
+    : [];
+  const checkStatus = allStatuses.find((s) => s.context === name);
+
+  // Fetch console output
+  const { data: consoleData, error: consoleError, isLoading: consoleLoading } = useSWR<{ output: string }>(
+    job && build ? `/api/jenkins/console?job=${encodeURIComponent(job)}&build=${encodeURIComponent(build)}` : null,
+    fetcher,
+    { refreshInterval: POLLING_INTERVAL },
+  );
+
+  // Fetch PR title if pr param is set
+  const { data: prData } = useSWR<{ pr: { title: string } }>(
+    pr ? `/api/github/pulls/${pr}` : null,
+    fetcher,
+  );
+
+  const backLabel = pr
+    ? `PR #${pr}${prData?.pr?.title ? `: ${prData.pr.title}` : ""}`
+    : "Main Branch";
+  const backHref = pr ? `/pulls/${pr}` : "/main";
+
+  const jenkinsConsoleUrl = job && build
+    ? `/api/jenkins/console?job=${encodeURIComponent(job)}&build=${encodeURIComponent(build)}`
+    : null;
+  // We don't have the raw Jenkins URL here, but we can construct a link via the API
+  // The "View in Jenkins" link needs the actual Jenkins URL — we'll get it from the console response
+  const jenkinsViewUrl = consoleData && "buildUrl" in consoleData
+    ? (consoleData as { buildUrl?: string }).buildUrl?.replace(/\/?$/, "/console")
+    : null;
+
   async function handleRerun() {
-    if (!buildUrl) return;
+    if (!job || !build) return;
     setRerunStatus("loading");
     try {
       const res = await fetch("/api/jenkins/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buildUrl }),
+        body: JSON.stringify({ job, build }),
       });
       if (!res.ok) throw new Error();
       setRerunStatus("success");
@@ -49,12 +94,10 @@ function CheckDetail() {
     }
   }
 
-  const consoleUrl = buildUrl ? buildUrl.replace(/\/?$/, "/console") : null;
-
   return (
     <div>
       <Link
-        href={from}
+        href={backHref}
         className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
       >
         &larr; {backLabel}
@@ -63,13 +106,16 @@ function CheckDetail() {
       <div className="mb-4 rounded-lg border border-gray-200 bg-white px-5 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">{name}</h2>
-            <StatusBadge state={state} />
+            <h2 className="text-lg font-semibold text-gray-900">{displayName}</h2>
+            {checkStatus && <StatusBadge state={checkStatus.state} />}
+            {checkStatus && (
+              <span className="text-xs text-gray-400">{timeAgo(checkStatus.created_at)}</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            {consoleUrl && (
+            {jenkinsViewUrl && (
               <a
-                href={consoleUrl}
+                href={jenkinsViewUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors"
@@ -77,7 +123,7 @@ function CheckDetail() {
                 View in Jenkins
               </a>
             )}
-            {buildUrl && (
+            {job && build && (
               <button
                 onClick={handleRerun}
                 disabled={rerunStatus === "loading"}
@@ -102,22 +148,32 @@ function CheckDetail() {
             )}
           </div>
         </div>
+
+        {commit && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">
+            <CommitLink sha={commit.sha} />
+            <span>&middot;</span>
+            <span className="truncate text-gray-700">{commit.message}</span>
+            <span>&middot;</span>
+            <AuthorLink login={commit.author_login} name={commit.author} />
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-gray-900 p-4 overflow-x-auto">
-        {isLoading && (
+        {consoleLoading && (
           <div className="space-y-2">
             {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="h-4 animate-pulse rounded bg-gray-700" style={{ width: `${40 + i * 10}%` }} />
             ))}
           </div>
         )}
-        {error && (
+        {consoleError && (
           <p className="text-sm text-red-400">Failed to load console output</p>
         )}
-        {data && (
+        {consoleData && (
           <pre className="text-xs leading-relaxed text-gray-200 whitespace-pre-wrap break-words font-mono">
-            {data.output || "No output"}
+            {consoleData.output || "No output"}
           </pre>
         )}
       </div>

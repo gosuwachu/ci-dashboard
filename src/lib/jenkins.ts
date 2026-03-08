@@ -6,11 +6,16 @@ function getConfig() {
   };
 }
 
-function toJobPath(path: string): string {
+export function toJobPath(path: string): string {
   return path
     .split("/")
     .map((s) => `job/${s}`)
     .join("/");
+}
+
+export function toBuildUrl(job: string, build: string): string {
+  const { url } = getConfig();
+  return `${url}/${toJobPath(job)}/${build}/`;
 }
 
 function authHeader(): string {

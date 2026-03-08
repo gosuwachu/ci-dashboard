@@ -18,6 +18,13 @@ export async function fetchCommits(sha: string, perPage = 20) {
   return res.json();
 }
 
+export async function fetchCommit(sha: string) {
+  const url = `${BASE}/repos/${OWNER}/${REPO}/commits/${sha}`;
+  const res = await fetch(url, { headers: headers(), next: { revalidate: 0 } });
+  if (!res.ok) throw new Error(`GitHub commit: ${res.status}`);
+  return res.json();
+}
+
 export async function fetchCombinedStatus(sha: string) {
   const url = `${BASE}/repos/${OWNER}/${REPO}/commits/${sha}/status`;
   const res = await fetch(url, { headers: headers(), next: { revalidate: 0 } });

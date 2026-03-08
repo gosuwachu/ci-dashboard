@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
-import { fetchConsoleOutput } from "@/lib/jenkins";
+import { fetchConsoleOutput, toBuildUrl } from "@/lib/jenkins";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const buildUrl = searchParams.get("buildUrl");
+  const job = searchParams.get("job");
+  const build = searchParams.get("build");
+  const buildUrl = job && build ? toBuildUrl(job, build) : searchParams.get("buildUrl");
 
   if (!buildUrl) {
-    return NextResponse.json({ error: "buildUrl is required" }, { status: 400 });
+    return NextResponse.json({ error: "job+build or buildUrl is required" }, { status: 400 });
   }
 
   try {

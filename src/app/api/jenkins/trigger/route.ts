@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { triggerBuild, fetchBuildParams } from "@/lib/jenkins";
+import { triggerBuild, fetchBuildParams, toBuildUrl } from "@/lib/jenkins";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
     // Replay mode: fetch params from a previous build and re-trigger omnibus
-    if (body.buildUrl) {
-      const params = await fetchBuildParams(body.buildUrl);
+    const replayUrl = body.buildUrl || (body.job && body.build ? toBuildUrl(body.job, body.build) : null);
+    if (replayUrl) {
+      const params = await fetchBuildParams(replayUrl);
       await triggerBuild("mobile-app-support/omnibus", params);
       return NextResponse.json({ ok: true });
     }

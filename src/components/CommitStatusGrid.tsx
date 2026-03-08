@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import { POLLING_INTERVAL, stepDisplayName } from "@/lib/constants";
+import { timeAgo } from "@/lib/utils";
 import type { GroupedStatuses, ParsedStatus, CommitStatus, StatusState } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -23,29 +24,53 @@ function cellColors(state: StatusState | null): string {
   }
 }
 
-/** Extract the Jenkins build URL from a target_url (which may be a dashboard URL or a raw Jenkins URL) */
-function extractBuildUrl(targetUrl: string): string {
+/** Parse a Jenkins build URL path into job name and build number */
+function parseJenkinsUrl(jenkinsUrl: string): { job: string; build: string } | null {
+  try {
+    const url = new URL(jenkinsUrl);
+    const match = url.pathname.match(/^(\/(?:job\/[^/]+\/)+)(\d+)\/?$/);
+    if (match) {
+      const jobParts = match[1].split("/").filter((p) => p !== "" && p !== "job");
+      return { job: jobParts.join("/"), build: match[2] };
+    }
+  } catch {
+    // not a valid URL
+  }
+  return null;
+}
+
+/** Parse a target_url to extract job name and build number */
+function parseTargetUrl(targetUrl: string): { job: string; build: string } | null {
   try {
     const url = new URL(targetUrl);
     if (url.pathname === "/checks") {
-      // Dashboard URL — extract the original Jenkins build URL
-      return url.searchParams.get("build") ?? targetUrl;
+      // New dashboard URL format — has job+build params directly
+      const job = url.searchParams.get("job");
+      const build = url.searchParams.get("build");
+      if (job && build) return { job, build };
+      // Old dashboard URL format — has full Jenkins URL in build param
+      const oldBuildUrl = url.searchParams.get("build");
+      if (oldBuildUrl) return parseJenkinsUrl(oldBuildUrl);
     }
   } catch {
-    // not a valid URL, return as-is
+    // not a valid URL
   }
-  return targetUrl;
+  // Raw Jenkins URL
+  return parseJenkinsUrl(targetUrl);
 }
 
-function checkPageUrl(targetUrl: string | null, name: string, from: string, state: StatusState): string | undefined {
+function checkPageUrl(targetUrl: string | null, sha: string, name: string, pr: string | null): string | undefined {
   if (!targetUrl) return undefined;
-  const buildUrl = extractBuildUrl(targetUrl);
-  return `/checks?build=${encodeURIComponent(buildUrl)}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}&state=${state}`;
+  const parsed = parseTargetUrl(targetUrl);
+  if (!parsed) return undefined;
+  const params = new URLSearchParams({ sha, job: parsed.job, build: parsed.build, name });
+  if (pr) params.set("pr", pr);
+  return `/checks?${params.toString()}`;
 }
 
 type RerunStatus = "idle" | "loading" | "success" | "error";
 
-function RerunButton({ buildUrl }: { buildUrl: string }) {
+function RerunButton({ job, build }: { job: string; build: string }) {
   const [status, setStatus] = useState<RerunStatus>("idle");
 
   async function handleClick(e: React.MouseEvent) {
@@ -56,7 +81,7 @@ function RerunButton({ buildUrl }: { buildUrl: string }) {
       const res = await fetch("/api/jenkins/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ buildUrl }),
+        body: JSON.stringify({ job, build }),
       });
       if (!res.ok) throw new Error();
       setStatus("success");
@@ -87,19 +112,20 @@ function RerunButton({ buildUrl }: { buildUrl: string }) {
   );
 }
 
-function StatusCell({ status, from }: { status: ParsedStatus; from: string }) {
+function StatusCell({ status, sha, pr }: { status: ParsedStatus; sha: string; pr: string | null }) {
   const displayName = stepDisplayName(status.step);
-  const url = checkPageUrl(status.target_url, `${status.platform.toUpperCase()} — ${displayName}`, from, status.state);
+  const url = checkPageUrl(status.target_url, sha, status.context, pr);
   const colors = cellColors(status.state);
   const content = (
     <>
       <span className="text-xs font-semibold">{displayName}</span>
       <span className="text-[10px] opacity-80">{status.description}</span>
+      <span className="text-[10px] opacity-60">{timeAgo(status.created_at)}</span>
     </>
   );
 
-  const jenkinsUrl = status.target_url ? extractBuildUrl(status.target_url) : null;
-  const rerun = jenkinsUrl ? <RerunButton buildUrl={jenkinsUrl} /> : null;
+  const parsed = status.target_url ? parseTargetUrl(status.target_url) : null;
+  const rerun = parsed ? <RerunButton job={parsed.job} build={parsed.build} /> : null;
 
   if (url) {
     return (
@@ -121,18 +147,19 @@ function StatusCell({ status, from }: { status: ParsedStatus; from: string }) {
   );
 }
 
-function OtherCell({ status, from }: { status: CommitStatus; from: string }) {
-  const url = checkPageUrl(status.target_url, status.context, from, status.state);
+function OtherCell({ status, sha, pr }: { status: CommitStatus; sha: string; pr: string | null }) {
+  const url = checkPageUrl(status.target_url, sha, status.context, pr);
   const colors = cellColors(status.state);
   const content = (
     <>
       <span className="text-xs font-semibold">{status.context}</span>
       <span className="text-[10px] opacity-80">{status.description}</span>
+      <span className="text-[10px] opacity-60">{timeAgo(status.created_at)}</span>
     </>
   );
 
-  const jenkinsUrl = status.target_url ? extractBuildUrl(status.target_url) : null;
-  const rerun = jenkinsUrl ? <RerunButton buildUrl={jenkinsUrl} /> : null;
+  const parsed = status.target_url ? parseTargetUrl(status.target_url) : null;
+  const rerun = parsed ? <RerunButton job={parsed.job} build={parsed.build} /> : null;
 
   if (url) {
     return (
@@ -154,7 +181,7 @@ function OtherCell({ status, from }: { status: CommitStatus; from: string }) {
   );
 }
 
-function PlatformSection({ label, statuses, from }: { label: string; statuses: ParsedStatus[]; from: string }) {
+function PlatformSection({ label, statuses, sha, pr }: { label: string; statuses: ParsedStatus[]; sha: string; pr: string | null }) {
   if (statuses.length === 0) return null;
   return (
     <div>
@@ -163,7 +190,7 @@ function PlatformSection({ label, statuses, from }: { label: string; statuses: P
       </h4>
       <div className="flex flex-wrap gap-2">
         {statuses.map((s) => (
-          <StatusCell key={s.context} status={s} from={from} />
+          <StatusCell key={s.context} status={s} sha={sha} pr={pr} />
         ))}
       </div>
     </div>
@@ -177,6 +204,10 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
     fetcher,
     { refreshInterval: POLLING_INTERVAL }
   );
+
+  // Detect PR number from pathname (e.g. /pulls/42)
+  const prMatch = pathname.match(/^\/pulls\/(\d+)/);
+  const pr = prMatch ? prMatch[1] : null;
 
   if (isLoading) {
     return (
@@ -203,8 +234,8 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
 
   return (
     <div className="space-y-4">
-      <PlatformSection label="iOS" statuses={data.ios} from={pathname} />
-      <PlatformSection label="Android" statuses={data.android} from={pathname} />
+      <PlatformSection label="iOS" statuses={data.ios} sha={sha} pr={pr} />
+      <PlatformSection label="Android" statuses={data.android} sha={sha} pr={pr} />
       {data.other.length > 0 && (
         <div>
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -212,7 +243,7 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
           </h4>
           <div className="flex flex-wrap gap-2">
             {data.other.map((s) => (
-              <OtherCell key={s.context} status={s} from={pathname} />
+              <OtherCell key={s.context} status={s} sha={sha} pr={pr} />
             ))}
           </div>
         </div>

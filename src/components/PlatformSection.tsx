@@ -2,6 +2,7 @@
 
 import type { ParsedStatus } from "@/lib/types";
 import { stepDisplayName } from "@/lib/constants";
+import { timeAgo } from "@/lib/utils";
 import StatusBadge from "./StatusBadge";
 
 export default function PlatformSection({
@@ -32,6 +33,7 @@ export default function PlatformSection({
               {s.description && (
                 <span className="text-gray-400 text-xs">{s.description}</span>
               )}
+              <span className="text-gray-400 text-xs">{timeAgo(s.created_at)}</span>
             </div>
             {s.target_url && (
               <a

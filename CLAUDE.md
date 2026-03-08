@@ -31,3 +31,5 @@ npm run build                         # Production build (no need to rm .next fi
 - Jenkins trigger uses `buildWithParameters` with CSRF crumb + session cookie forwarding
 - Individual check re-run: fetches original build params from Jenkins API and replays them
 - Shared link components (`AuthorLink`, `CommitLink`) used across main and pulls pages for consistent styling
+- Checks page (`/checks`) takes clean URL params: `sha`, `job`, `build`, `name`, `pr` (optional). Jenkins build URL is reconstructed server-side from `job`+`build` via `toBuildUrl()` in `lib/jenkins.ts`
+- The ci-cli sets `target_url` on GitHub commit statuses to point to the dashboard checks page with these params (via `dashboard_check_url` in `github.py`)
