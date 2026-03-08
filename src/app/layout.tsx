@@ -32,6 +32,15 @@ export default function RootLayout({
               <AppSelector />
               <NavTabs />
               <a
+                href="http://localhost:8080/job/mobile-app/"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="View in Jenkins"
+                className="opacity-60 hover:opacity-100 transition-opacity"
+              >
+                <img src="/jenkins.svg" alt="Jenkins" className="h-5 w-5" />
+              </a>
+              <a
                 href="https://github.com/gosuwachu/mobile-app"
                 target="_blank"
                 rel="noopener noreferrer"
