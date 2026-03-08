@@ -55,13 +55,13 @@ function StatusCell({ status }: { status: ParsedStatus }) {
   );
 }
 
-function PlatformRow({ label, statuses }: { label: string; statuses: ParsedStatus[] }) {
+function PlatformSection({ label, statuses }: { label: string; statuses: ParsedStatus[] }) {
   if (statuses.length === 0) return null;
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-16 shrink-0 text-xs font-semibold uppercase tracking-wider text-gray-500">
+    <div>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
         {label}
-      </span>
+      </h4>
       <div className="flex flex-wrap gap-2">
         {statuses.map((s) => (
           <StatusCell key={s.context} status={s} />
@@ -93,7 +93,7 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
     );
   }
 
-  if (error || !data) {
+  if (error || !data || !data.ios) {
     return <p className="text-sm text-red-500 py-2">Failed to load statuses</p>;
   }
 
@@ -102,9 +102,46 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
   }
 
   return (
-    <div className="space-y-3">
-      <PlatformRow label="iOS" statuses={data.ios} />
-      <PlatformRow label="Android" statuses={data.android} />
+    <div className="space-y-4">
+      <PlatformSection label="iOS" statuses={data.ios} />
+      <PlatformSection label="Android" statuses={data.android} />
+      {data.other.length > 0 && (
+        <div>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            Other
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {data.other.map((s) => {
+              const url = consoleUrl(s.target_url);
+              const colors = cellColors(s.state);
+              const content = (
+                <>
+                  <span className="text-xs font-semibold">{s.context}</span>
+                  <span className="text-[10px] opacity-80">{s.description}</span>
+                </>
+              );
+              return url ? (
+                <a
+                  key={s.context}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
+                >
+                  {content}
+                </a>
+              ) : (
+                <div
+                  key={s.context}
+                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] ${colors}`}
+                >
+                  {content}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
