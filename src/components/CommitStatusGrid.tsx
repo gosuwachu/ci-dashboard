@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import { POLLING_INTERVAL, stepDisplayName } from "@/lib/constants";
 import type { GroupedStatuses, ParsedStatus, CommitStatus, StatusState } from "@/lib/types";
@@ -21,9 +23,9 @@ function cellColors(state: StatusState | null): string {
   }
 }
 
-function consoleUrl(targetUrl: string | null): string | undefined {
+function checkPageUrl(targetUrl: string | null, name: string, from: string, state: StatusState): string | undefined {
   if (!targetUrl) return undefined;
-  return targetUrl.replace(/\/?$/, "/console");
+  return `/checks?build=${encodeURIComponent(targetUrl)}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}&state=${state}`;
 }
 
 type RerunStatus = "idle" | "loading" | "success" | "error";
@@ -70,12 +72,13 @@ function RerunButton({ buildUrl }: { buildUrl: string }) {
   );
 }
 
-function StatusCell({ status }: { status: ParsedStatus }) {
-  const url = consoleUrl(status.target_url);
+function StatusCell({ status, from }: { status: ParsedStatus; from: string }) {
+  const displayName = stepDisplayName(status.step);
+  const url = checkPageUrl(status.target_url, `${status.platform.toUpperCase()} — ${displayName}`, from, status.state);
   const colors = cellColors(status.state);
   const content = (
     <>
-      <span className="text-xs font-semibold">{stepDisplayName(status.step)}</span>
+      <span className="text-xs font-semibold">{displayName}</span>
       <span className="text-[10px] opacity-80">{status.description}</span>
     </>
   );
@@ -84,15 +87,13 @@ function StatusCell({ status }: { status: ParsedStatus }) {
 
   if (url) {
     return (
-      <a
+      <Link
         href={url}
-        target="_blank"
-        rel="noopener noreferrer"
         className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
       >
         {content}
         {rerun}
-      </a>
+      </Link>
     );
   }
 
@@ -104,8 +105,8 @@ function StatusCell({ status }: { status: ParsedStatus }) {
   );
 }
 
-function OtherCell({ status }: { status: CommitStatus }) {
-  const url = consoleUrl(status.target_url);
+function OtherCell({ status, from }: { status: CommitStatus; from: string }) {
+  const url = checkPageUrl(status.target_url, status.context, from, status.state);
   const colors = cellColors(status.state);
   const content = (
     <>
@@ -118,15 +119,13 @@ function OtherCell({ status }: { status: CommitStatus }) {
 
   if (url) {
     return (
-      <a
+      <Link
         href={url}
-        target="_blank"
-        rel="noopener noreferrer"
         className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
       >
         {content}
         {rerun}
-      </a>
+      </Link>
     );
   }
 
@@ -138,7 +137,7 @@ function OtherCell({ status }: { status: CommitStatus }) {
   );
 }
 
-function PlatformSection({ label, statuses }: { label: string; statuses: ParsedStatus[] }) {
+function PlatformSection({ label, statuses, from }: { label: string; statuses: ParsedStatus[]; from: string }) {
   if (statuses.length === 0) return null;
   return (
     <div>
@@ -147,7 +146,7 @@ function PlatformSection({ label, statuses }: { label: string; statuses: ParsedS
       </h4>
       <div className="flex flex-wrap gap-2">
         {statuses.map((s) => (
-          <StatusCell key={s.context} status={s} />
+          <StatusCell key={s.context} status={s} from={from} />
         ))}
       </div>
     </div>
@@ -155,6 +154,7 @@ function PlatformSection({ label, statuses }: { label: string; statuses: ParsedS
 }
 
 export default function CommitStatusGrid({ sha }: { sha: string }) {
+  const pathname = usePathname();
   const { data, error, isLoading } = useSWR<GroupedStatuses>(
     `/api/github/commits/${sha}/statuses`,
     fetcher,
@@ -186,8 +186,8 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
 
   return (
     <div className="space-y-4">
-      <PlatformSection label="iOS" statuses={data.ios} />
-      <PlatformSection label="Android" statuses={data.android} />
+      <PlatformSection label="iOS" statuses={data.ios} from={pathname} />
+      <PlatformSection label="Android" statuses={data.android} from={pathname} />
       {data.other.length > 0 && (
         <div>
           <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -195,7 +195,7 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
           </h4>
           <div className="flex flex-wrap gap-2">
             {data.other.map((s) => (
-              <OtherCell key={s.context} status={s} />
+              <OtherCell key={s.context} status={s} from={pathname} />
             ))}
           </div>
         </div>

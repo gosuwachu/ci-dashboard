@@ -65,6 +65,17 @@ export async function fetchBuildParams(buildUrl: string): Promise<Record<string,
   return params;
 }
 
+export async function fetchConsoleOutput(buildUrl: string, lines: number = 200): Promise<string> {
+  const res = await fetch(
+    `${buildUrl.replace(/\/$/, "")}/consoleText`,
+    { headers: { Authorization: authHeader() } }
+  );
+  if (!res.ok) throw new Error(`Jenkins console: ${res.status}`);
+  const text = await res.text();
+  const allLines = text.split("\n");
+  return allLines.slice(-lines).join("\n");
+}
+
 export async function fetchJobInfo(path: string, tree?: string) {
   const { url, user, pass } = getConfig();
   const jobPath = toJobPath(path);
