@@ -5,12 +5,13 @@ import Link from "next/link";
 import useSWR from "swr";
 import { POLLING_INTERVAL } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
-import type { Commit } from "@/lib/types";
+import type { Commit, Label } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import CommitStatusGrid from "@/components/CommitStatusGrid";
 import AuthorLink from "@/components/AuthorLink";
 import CommitLink from "@/components/CommitLink";
 import RestartButton from "@/components/RestartButton";
+import LabelBadge from "@/components/LabelBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -40,6 +41,7 @@ interface PRDetail {
     html_url: string;
     review_state: string;
     updated_at: string;
+    labels: Label[];
   };
   commits: Commit[];
 }
@@ -93,6 +95,9 @@ export default function PullRequestDetailPage({
             #{pr.number}
           </a>
           <h2 className="text-lg font-semibold text-gray-900">{pr.title}</h2>
+          {pr.labels.map((l) => (
+            <LabelBadge key={l.name} label={l} />
+          ))}
           <ReviewBadge state={pr.review_state} />
         </div>
         <div className="mt-2 flex items-center gap-2 text-sm text-gray-500">

@@ -18,6 +18,10 @@ export async function GET(
 
     const head = pr.head as Record<string, string>;
     const user = pr.user as Record<string, unknown>;
+    const labels = ((pr.labels || []) as Record<string, unknown>[]).map((l) => ({
+      name: l.name as string,
+      color: l.color as string,
+    }));
 
     // Determine review state: take the latest decisive review per reviewer
     const reviewsByUser = new Map<string, string>();
@@ -74,6 +78,7 @@ export async function GET(
         html_url: `https://github.com/${OWNER}/${REPO}/pull/${pr.number}`,
         review_state,
         updated_at: pr.updated_at,
+        labels,
       },
       commits,
     });

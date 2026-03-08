@@ -8,6 +8,7 @@ import type { PullRequest } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
 import AuthorLink from "./AuthorLink";
 import CommitLink from "./CommitLink";
+import LabelBadge from "./LabelBadge";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -59,6 +60,9 @@ export default function PullRequestList() {
               <span className="text-sm font-medium text-gray-800">
                 {pr.title}
               </span>
+              {pr.labels.map((l) => (
+                <LabelBadge key={l.name} label={l} />
+              ))}
             </div>
             <StatusBadge state={pr.status} />
           </div>

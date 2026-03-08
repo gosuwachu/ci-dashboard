@@ -23,6 +23,11 @@ export interface Commit {
   status: StatusState | null;
 }
 
+export interface Label {
+  name: string;
+  color: string;
+}
+
 export interface PullRequest {
   number: number;
   title: string;
@@ -32,6 +37,7 @@ export interface PullRequest {
   head_sha: string;
   status: StatusState | null;
   updated_at: string;
+  labels: Label[];
 }
 
 export interface GroupedStatuses {

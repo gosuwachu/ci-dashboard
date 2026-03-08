@@ -19,6 +19,11 @@ export async function GET() {
           // status unavailable
         }
 
+        const labels = ((pr.labels || []) as Record<string, unknown>[]).map((l) => ({
+          name: l.name as string,
+          color: l.color as string,
+        }));
+
         return {
           number: pr.number,
           title: pr.title,
@@ -28,6 +33,7 @@ export async function GET() {
           head_sha: head.sha,
           status,
           updated_at: pr.updated_at,
+          labels,
         };
       })
     );
