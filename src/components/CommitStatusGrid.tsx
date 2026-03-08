@@ -23,9 +23,24 @@ function cellColors(state: StatusState | null): string {
   }
 }
 
+/** Extract the Jenkins build URL from a target_url (which may be a dashboard URL or a raw Jenkins URL) */
+function extractBuildUrl(targetUrl: string): string {
+  try {
+    const url = new URL(targetUrl);
+    if (url.pathname === "/checks") {
+      // Dashboard URL — extract the original Jenkins build URL
+      return url.searchParams.get("build") ?? targetUrl;
+    }
+  } catch {
+    // not a valid URL, return as-is
+  }
+  return targetUrl;
+}
+
 function checkPageUrl(targetUrl: string | null, name: string, from: string, state: StatusState): string | undefined {
   if (!targetUrl) return undefined;
-  return `/checks?build=${encodeURIComponent(targetUrl)}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}&state=${state}`;
+  const buildUrl = extractBuildUrl(targetUrl);
+  return `/checks?build=${encodeURIComponent(buildUrl)}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(from)}&state=${state}`;
 }
 
 type RerunStatus = "idle" | "loading" | "success" | "error";
@@ -83,7 +98,8 @@ function StatusCell({ status, from }: { status: ParsedStatus; from: string }) {
     </>
   );
 
-  const rerun = status.target_url ? <RerunButton buildUrl={status.target_url} /> : null;
+  const jenkinsUrl = status.target_url ? extractBuildUrl(status.target_url) : null;
+  const rerun = jenkinsUrl ? <RerunButton buildUrl={jenkinsUrl} /> : null;
 
   if (url) {
     return (
@@ -115,7 +131,8 @@ function OtherCell({ status, from }: { status: CommitStatus; from: string }) {
     </>
   );
 
-  const rerun = status.target_url ? <RerunButton buildUrl={status.target_url} /> : null;
+  const jenkinsUrl = status.target_url ? extractBuildUrl(status.target_url) : null;
+  const rerun = jenkinsUrl ? <RerunButton buildUrl={jenkinsUrl} /> : null;
 
   if (url) {
     return (

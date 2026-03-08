@@ -17,7 +17,7 @@ export default function StatusBadge({
   state: StatusState | null;
   label?: string;
 }) {
-  const s = styles[state ?? "none"];
+  const s = (state && styles[state]) ?? styles.none;
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}
