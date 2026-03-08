@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { POLLING_INTERVAL, stepDisplayName } from "@/lib/constants";
-import type { GroupedStatuses, ParsedStatus, StatusState } from "@/lib/types";
+import type { GroupedStatuses, ParsedStatus, CommitStatus, StatusState } from "@/lib/types";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -25,6 +26,50 @@ function consoleUrl(targetUrl: string | null): string | undefined {
   return targetUrl.replace(/\/?$/, "/console");
 }
 
+type RerunStatus = "idle" | "loading" | "success" | "error";
+
+function RerunButton({ buildUrl }: { buildUrl: string }) {
+  const [status, setStatus] = useState<RerunStatus>("idle");
+
+  async function handleClick(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/jenkins/trigger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ buildUrl }),
+      });
+      if (!res.ok) throw new Error();
+      setStatus("success");
+      setTimeout(() => setStatus("idle"), 2000);
+    } catch {
+      setStatus("error");
+      setTimeout(() => setStatus("idle"), 3000);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={status === "loading"}
+      title="Re-run this check"
+      className={`absolute top-1 right-1 rounded px-1 py-0.5 text-[9px] font-medium opacity-0 group-hover:opacity-100 transition-opacity ${
+        status === "success"
+          ? "bg-white/40 text-white"
+          : status === "error"
+            ? "bg-white/80 text-red-700"
+            : status === "loading"
+              ? "bg-white/40 text-white cursor-wait"
+              : "bg-white/30 text-white hover:bg-white/50"
+      }`}
+    >
+      {status === "loading" ? "..." : status === "success" ? "OK" : status === "error" ? "Err" : "Re-run"}
+    </button>
+  );
+}
+
 function StatusCell({ status }: { status: ParsedStatus }) {
   const url = consoleUrl(status.target_url);
   const colors = cellColors(status.state);
@@ -35,22 +80,60 @@ function StatusCell({ status }: { status: ParsedStatus }) {
     </>
   );
 
+  const rerun = status.target_url ? <RerunButton buildUrl={status.target_url} /> : null;
+
   if (url) {
     return (
       <a
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
+        className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
       >
         {content}
+        {rerun}
       </a>
     );
   }
 
   return (
-    <div className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] ${colors}`}>
+    <div className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] ${colors}`}>
       {content}
+      {rerun}
+    </div>
+  );
+}
+
+function OtherCell({ status }: { status: CommitStatus }) {
+  const url = consoleUrl(status.target_url);
+  const colors = cellColors(status.state);
+  const content = (
+    <>
+      <span className="text-xs font-semibold">{status.context}</span>
+      <span className="text-[10px] opacity-80">{status.description}</span>
+    </>
+  );
+
+  const rerun = status.target_url ? <RerunButton buildUrl={status.target_url} /> : null;
+
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
+      >
+        {content}
+        {rerun}
+      </a>
+    );
+  }
+
+  return (
+    <div className={`group relative flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] ${colors}`}>
+      {content}
+      {rerun}
     </div>
   );
 }
@@ -111,34 +194,9 @@ export default function CommitStatusGrid({ sha }: { sha: string }) {
             Other
           </h4>
           <div className="flex flex-wrap gap-2">
-            {data.other.map((s) => {
-              const url = consoleUrl(s.target_url);
-              const colors = cellColors(s.state);
-              const content = (
-                <>
-                  <span className="text-xs font-semibold">{s.context}</span>
-                  <span className="text-[10px] opacity-80">{s.description}</span>
-                </>
-              );
-              return url ? (
-                <a
-                  key={s.context}
-                  href={url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] transition-opacity hover:opacity-80 ${colors}`}
-                >
-                  {content}
-                </a>
-              ) : (
-                <div
-                  key={s.context}
-                  className={`flex flex-col items-center justify-center rounded-lg px-3 py-3 min-w-[110px] ${colors}`}
-                >
-                  {content}
-                </div>
-              );
-            })}
+            {data.other.map((s) => (
+              <OtherCell key={s.context} status={s} />
+            ))}
           </div>
         </div>
       )}

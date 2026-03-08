@@ -29,11 +29,14 @@ async function fetchCrumb(): Promise<{ crumbField: string; crumb: string; cookie
   return { crumbField: data.crumbRequestField, crumb: data.crumb, cookies };
 }
 
-export async function triggerBuild(path: string) {
+export async function triggerBuild(path: string, params?: Record<string, string>) {
   const { url } = getConfig();
   const jobPath = toJobPath(path);
   const { crumbField, crumb, cookies } = await fetchCrumb();
-  const res = await fetch(`${url}/${jobPath}/buildWithParameters`, {
+  const query = params
+    ? "?" + new URLSearchParams(params).toString()
+    : "";
+  const res = await fetch(`${url}/${jobPath}/buildWithParameters${query}`, {
     method: "POST",
     headers: {
       Authorization: authHeader(),
@@ -42,6 +45,24 @@ export async function triggerBuild(path: string) {
     },
   });
   if (!res.ok) throw new Error(`Jenkins trigger: ${res.status}`);
+}
+
+export async function fetchBuildParams(buildUrl: string): Promise<Record<string, string>> {
+  const res = await fetch(
+    `${buildUrl.replace(/\/$/, "")}/api/json?tree=actions[parameters[name,value]]`,
+    { headers: { Authorization: authHeader() } }
+  );
+  if (!res.ok) throw new Error(`Jenkins build params: ${res.status}`);
+  const data = await res.json();
+  const params: Record<string, string> = {};
+  for (const action of data.actions || []) {
+    for (const p of action.parameters || []) {
+      if (p.name && p.value !== undefined) {
+        params[p.name] = p.value;
+      }
+    }
+  }
+  return params;
 }
 
 export async function fetchJobInfo(path: string, tree?: string) {
