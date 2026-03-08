@@ -30,3 +30,4 @@ npm run build                         # Production build (no need to rm .next fi
 - Commit status contexts follow `ci/<platform>-<step>` naming (parsed via regex)
 - Jenkins trigger uses `buildWithParameters` with CSRF crumb + session cookie forwarding
 - Individual check re-run: fetches original build params from Jenkins API and replays them
+- Shared link components (`AuthorLink`, `CommitLink`) used across main and pulls pages for consistent styling

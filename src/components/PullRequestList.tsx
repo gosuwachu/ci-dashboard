@@ -1,15 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { POLLING_INTERVAL } from "@/lib/constants";
+import { OWNER, REPO, POLLING_INTERVAL } from "@/lib/constants";
 import { timeAgo } from "@/lib/utils";
 import type { PullRequest } from "@/lib/types";
 import StatusBadge from "./StatusBadge";
+import AuthorLink from "./AuthorLink";
+import CommitLink from "./CommitLink";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function PullRequestList() {
+  const router = useRouter();
   const { data, error, isLoading } = useSWR<{ pulls: PullRequest[] }>(
     "/api/github/pulls",
     fetcher,
@@ -37,24 +40,32 @@ export default function PullRequestList() {
   return (
     <div className="space-y-2">
       {data.pulls.map((pr) => (
-        <Link
+        <div
           key={pr.number}
-          href={`/pulls/${pr.number}`}
-          className="block rounded-lg border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50 transition-colors"
+          onClick={() => router.push(`/pulls/${pr.number}`)}
+          className="block cursor-pointer rounded-lg border border-gray-200 bg-white px-4 py-3 hover:bg-gray-50 transition-colors"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="text-sm font-semibold text-gray-500">
+              <a
+                href={`https://github.com/${OWNER}/${REPO}/pull/${pr.number}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-semibold text-blue-600 hover:text-blue-800 hover:underline"
+              >
                 #{pr.number}
-              </span>
+              </a>
               <span className="text-sm font-medium text-gray-800">
                 {pr.title}
               </span>
             </div>
             <StatusBadge state={pr.status} />
           </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400">
-            <span>{pr.author}</span>
+          <div className="mt-1 flex items-center gap-2 text-xs text-gray-400" onClick={(e) => e.stopPropagation()}>
+            <AuthorLink login={pr.author} name={pr.author} />
+            <span>&middot;</span>
+            <CommitLink sha={pr.head_sha} />
             <span>&middot;</span>
             <code className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">
               {pr.branch}
@@ -62,7 +73,7 @@ export default function PullRequestList() {
             <span>&middot;</span>
             <span>{timeAgo(pr.updated_at)}</span>
           </div>
-        </Link>
+        </div>
       ))}
     </div>
   );
