@@ -10,6 +10,7 @@ import StatusBadge from "@/components/StatusBadge";
 import CommitStatusGrid from "@/components/CommitStatusGrid";
 import AuthorLink from "@/components/AuthorLink";
 import CommitLink from "@/components/CommitLink";
+import RestartButton from "@/components/RestartButton";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -109,7 +110,10 @@ export default function PullRequestDetailPage({
 
       {latest && (
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h3 className="text-lg font-semibold text-gray-900">{latest.message}</h3>
+          <div className="flex items-start justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">{latest.message}</h3>
+            <RestartButton jobPath={`mobile-app/trigger/PR-${pr.number}`} />
+          </div>
           <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
             <CommitLink sha={latest.sha} />
             <span>&middot;</span>

@@ -8,6 +8,7 @@ import StatusBadge from "./StatusBadge";
 import CommitStatusGrid from "./CommitStatusGrid";
 import AuthorLink from "./AuthorLink";
 import CommitLink from "./CommitLink";
+import RestartButton from "./RestartButton";
 import { timeAgo } from "@/lib/utils";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -15,7 +16,10 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 function LatestCommit({ commit }: { commit: Commit }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <h3 className="text-lg font-semibold text-gray-900">{commit.message}</h3>
+      <div className="flex items-start justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">{commit.message}</h3>
+        <RestartButton jobPath="mobile-app/trigger/main" />
+      </div>
       <div className="mt-1 flex items-center gap-2 text-sm text-gray-500">
         <CommitLink sha={commit.sha} />
         <span>&middot;</span>

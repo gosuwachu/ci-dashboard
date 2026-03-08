@@ -14,7 +14,7 @@ function cellColors(state: StatusState | null): string {
     case "error":
       return "bg-red-500 text-white";
     case "pending":
-      return "bg-yellow-400 text-gray-900";
+      return "animate-pulse bg-yellow-400 text-gray-900";
     default:
       return "bg-gray-200 text-gray-500";
   }
